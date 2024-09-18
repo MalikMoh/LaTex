@@ -2,10 +2,29 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 // Function prototypes
 void on_text_changed(GtkTextBuffer *buffer, gpointer data);
 void parse_latex(const char *input, char *output, size_t max_output_size);
+const char *to_superscript(char c);
+
+// Function to convert a single-digit number to a superscript character (as a string)
+const char *to_superscript(char c) {
+    switch (c) {
+        case '0': return "\u2070";
+        case '1': return "\u00B9";
+        case '2': return "\u00B2";
+        case '3': return "\u00B3";
+        case '4': return "\u2074";
+        case '5': return "\u2075";
+        case '6': return "\u2076";
+        case '7': return "\u2077";
+        case '8': return "\u2078";
+        case '9': return "\u2079";
+        default: return "";
+    }
+}
 
 int main(int argc, char *argv[]) {
     GtkWidget *window;
@@ -75,7 +94,7 @@ void on_text_changed(GtkTextBuffer *buffer, gpointer data) {
 
 void parse_latex(const char *input, char *output, size_t max_output_size) {
     // Initialize the output buffer
-    strcpy(output, "Parsed Output:\n");
+    strcpy(output, "");
 
     // Simple parsing logic for some LaTeX commands
     while (*input) {
@@ -85,13 +104,23 @@ void parse_latex(const char *input, char *output, size_t max_output_size) {
                 strncat(output, "Fraction: ", max_output_size - strlen(output) - 1);
                 input += 4;
             } else if (strncmp(input, "sqrt", 4) == 0) {
-                strncat(output, "√ ", max_output_size - strlen(output) - 1);
+                strncat(output, "√", max_output_size - strlen(output) - 1);
                 input += 4;
+                while (*input == '{' || *input == '}') {
+                    input++;
+                }
             } else if (strncmp(input, "sum", 3) == 0) {
                 strncat(output, "Summation: ", max_output_size - strlen(output) - 1);
                 input += 3;
             } else {
                 strncat(output, "Unknown Command: ", max_output_size - strlen(output) - 1);
+            }
+        } else if (*input == '^') {
+            input++;
+            if (isdigit(*input)) {
+                const char *sup = to_superscript(*input);
+                strncat(output, sup, max_output_size - strlen(output) - 1);
+                input++;
             }
         } else if (*input == '$') {
             // Ignore the $ character for simplicity
