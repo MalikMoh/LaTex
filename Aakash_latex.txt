@@ -1,0 +1,6 @@
+% Sample LaTeX-like file
+$a/b$
+\frac{a}{b}
+\sqrt{\sqrt{\sqrt{x^3}}}
+\int_{0}^{\infty} e^{-x^2} dx
+\sum_{n=1}^{\infty} \frac{1}{n^2}

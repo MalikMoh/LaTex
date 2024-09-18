@@ -3,7 +3,7 @@
 #include <string.h>
 
 // Function prototypes
-void displayEditor();
+void displayEditor(char *input, size_t maxSize);
 void parseInput(const char *input, char *output);
 int checkSyntax(const char *input);
 void saveToFile(const char *filename, const char *content);
@@ -34,9 +34,7 @@ int main() {
                 printf("File content loaded:\n%s\n", input);
                 break;
             case 2: // Edit LaTeX
-                printf("Enter LaTeX expression: ");
-                fgets(input, sizeof(input), stdin);
-                input[strcspn(input, "\n")] = 0; // Remove newline
+                displayEditor(input, sizeof(input)); // Use displayEditor to get user input
                 if (checkSyntax(input)) {
                     parseInput(input, output);
                     printf("Converted Output: %s\n", output);
@@ -59,4 +57,75 @@ int main() {
         }
     }
     return 0;
+}
+
+void displayEditor(char *input, size_t maxSize) {
+    // Simple editor logic: get user input for LaTeX
+    printf("Enter LaTeX expression (max %zu characters):\n", maxSize - 1);
+    fgets(input, maxSize, stdin);
+    input[strcspn(input, "\n")] = 0; // Remove newline character
+}
+
+void parseInput(const char *input, char *output) {
+    // Simple parsing logic for LaTeX expressions
+    // This is a simplified version; a real implementation would be more complex
+    strcpy(output, ""); // Clear output
+
+    while (*input) {
+        if (*input == '\\') {
+            input++;
+            if (strncmp(input, "frac", 4) == 0) {
+                strcat(output, "fraction");
+                input += 4;
+            } else if (strncmp(input, "sqrt", 4) == 0) {
+                strcat(output, "root");
+                input += 4;
+            } else if (strncmp(input, "int", 3) == 0) {
+                strcat(output, "integral");
+                input += 3;
+            } else {
+                strcat(output, "unknown_command");
+            }
+        } else if (*input == '$') {
+            // Ignore $
+            input++;
+        } else {
+            strncat(output, input, 1);
+            input++;
+        }
+    }
+}
+
+int checkSyntax(const char *input) {
+    // Basic syntax checking (real implementation would need more rules)
+    int openBraces = 0;
+
+    while (*input) {
+        if (*input == '{') openBraces++;
+        if (*input == '}') openBraces--;
+        if (openBraces < 0) return 0; // More closing braces than opening
+        input++;
+    }
+    return openBraces == 0; // Return 1 if all braces match
+}
+
+void saveToFile(const char *filename, const char *content) {
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+    fprintf(file, "%s", content);
+    fclose(file);
+}
+
+void openFromFile(const char *filename, char *content, size_t maxSize) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+    fread(content, 1, maxSize, file);
+    content[maxSize - 1] = '\0'; // Ensure null termination
+    fclose(file);
 }
