@@ -5,15 +5,17 @@
 
 // Function prototypes
 void on_text_changed(GtkTextBuffer *buffer, gpointer data);
-void compile_latex(const char *latex_code, const char *output_image);
+void parse_latex(const char *input, char *output, size_t max_output_size);
 
 int main(int argc, char *argv[]) {
     GtkWidget *window;
     GtkWidget *hbox;
     GtkWidget *text_view;
-    GtkWidget *image;
-    GtkWidget *scroll_win;
+    GtkWidget *output_view;
+    GtkWidget *scroll_win_left;
+    GtkWidget *scroll_win_right;
     GtkTextBuffer *text_buffer;
+    GtkTextBuffer *output_buffer;
 
     gtk_init(&argc, &argv);
 
@@ -27,19 +29,23 @@ int main(int argc, char *argv[]) {
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_container_add(GTK_CONTAINER(window), hbox);
 
-    // Create text view for LaTeX input
+    // Create text view for LaTeX input (Left Side)
     text_view = gtk_text_view_new();
     text_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
-    g_signal_connect(text_buffer, "changed", G_CALLBACK(on_text_changed), image);
+    scroll_win_left = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scroll_win_left), text_view);
+    gtk_box_pack_start(GTK_BOX(hbox), scroll_win_left, TRUE, TRUE, 0);
 
-    // Add text view to a scrollable window
-    scroll_win = gtk_scrolled_window_new(NULL, NULL);
-    gtk_container_add(GTK_CONTAINER(scroll_win), text_view);
-    gtk_box_pack_start(GTK_BOX(hbox), scroll_win, TRUE, TRUE, 0);
+    // Create text view for output display (Right Side)
+    output_view = gtk_text_view_new();
+    output_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(output_view));
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(output_view), FALSE); // Make this view read-only
+    scroll_win_right = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scroll_win_right), output_view);
+    gtk_box_pack_start(GTK_BOX(hbox), scroll_win_right, TRUE, TRUE, 0);
 
-    // Create image widget for output
-    image = gtk_image_new();
-    gtk_box_pack_start(GTK_BOX(hbox), image, TRUE, TRUE, 0);
+    // Connect the buffer change event to our function
+    g_signal_connect(text_buffer, "changed", G_CALLBACK(on_text_changed), output_buffer);
 
     // Show all widgets
     gtk_widget_show_all(window);
@@ -50,37 +56,49 @@ int main(int argc, char *argv[]) {
 }
 
 void on_text_changed(GtkTextBuffer *buffer, gpointer data) {
-    GtkWidget *image = GTK_WIDGET(data);
+    GtkTextBuffer *output_buffer = GTK_TEXT_BUFFER(data);
     GtkTextIter start, end;
-    gchar *text;
+    gchar *input_text;
+    char output_text[1024]; // Buffer to store parsed LaTeX
 
     gtk_text_buffer_get_bounds(buffer, &start, &end);
-    text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+    input_text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 
-    // Compile the LaTeX code and generate output.png
-    compile_latex(text, "output.png");
+    // Parse the LaTeX input and generate output
+    parse_latex(input_text, output_text, sizeof(output_text));
 
-    // Load the image into the image widget
-    gtk_image_set_from_file(GTK_IMAGE(image), "output.png");
+    // Set the output buffer with the parsed text
+    gtk_text_buffer_set_text(output_buffer, output_text, -1);
 
-    g_free(text);
+    g_free(input_text);
 }
 
-void compile_latex(const char *latex_code, const char *output_image) {
-    FILE *file = fopen("temp.tex", "w");
-    if (!file) return;
+void parse_latex(const char *input, char *output, size_t max_output_size) {
+    // Initialize the output buffer
+    strcpy(output, "Parsed Output:\n");
 
-    // Write the LaTeX code to a temporary file
-    fprintf(file, "\\documentclass{standalone}\n");
-    fprintf(file, "\\usepackage{amsmath}\n");
-    fprintf(file, "\\begin{document}\n");
-    fprintf(file, "%s\n", latex_code);
-    fprintf(file, "\\end{document}\n");
-    fclose(file);
-
-    // Compile the LaTeX code
-    system("pdflatex -interaction=nonstopmode temp.tex");
-
-    // Convert PDF to PNG
-    system("pdftoppm -png temp.pdf > output.png");
+    // Simple parsing logic for some LaTeX commands
+    while (*input) {
+        if (*input == '\\') {
+            input++;
+            if (strncmp(input, "frac", 4) == 0) {
+                strncat(output, "Fraction: ", max_output_size - strlen(output) - 1);
+                input += 4;
+            } else if (strncmp(input, "sqrt", 4) == 0) {
+                strncat(output, "√ ", max_output_size - strlen(output) - 1);
+                input += 4;
+            } else if (strncmp(input, "sum", 3) == 0) {
+                strncat(output, "Summation: ", max_output_size - strlen(output) - 1);
+                input += 3;
+            } else {
+                strncat(output, "Unknown Command: ", max_output_size - strlen(output) - 1);
+            }
+        } else if (*input == '$') {
+            // Ignore the $ character for simplicity
+            input++;
+        } else {
+            strncat(output, input, 1); // Append the character
+            input++;
+        }
+    }
 }
