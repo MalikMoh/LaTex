@@ -2,22 +2,34 @@
 #include <webkit2/webkit2.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 #define MAX_HTML_SIZE 8192
 #define MAX_LATEX_SIZE 2048
 
-// Function to generate HTML content for LaTeX rendering
-#include <gtk/gtk.h>
-#include <webkit2/webkit2.h>
-#include <string.h>
-#include <stdio.h>
-#include <ctype.h> // Include this for isalpha
-#include <regex.h> // You may not need this unless you're using regex functions
+// Function to check for LaTeX syntax errors
+bool check_latex_syntax(const char *latex) {
+    int open_braces = 0;
+    bool in_math_mode = false;
 
-#define MAX_HTML_SIZE 8192
-#define MAX_LATEX_SIZE 2048
+    const char *ptr = latex;
+    while (*ptr != '\0') {
+        if (*ptr == '{') {
+            open_braces++;
+        } else if (*ptr == '}') {
+            if (open_braces == 0) return false;  // Extra closing brace
+            open_braces--;
+        } else if (*ptr == '$') {
+            in_math_mode = !in_math_mode;
+        }
+        ptr++;
+    }
 
-// Function to generate HTML content for LaTeX rendering
+    if (open_braces != 0 || in_math_mode) return false;  // Unmatched brace or unclosed math mode
+    return true;
+}
+
 // Function to generate HTML content for LaTeX rendering
 char* generate_html(const char *latex) {
     static char html_template[MAX_HTML_SIZE];
@@ -38,21 +50,29 @@ char* generate_html(const char *latex) {
         if (*ptr == '$') {
             // Toggle math mode when encountering $
             in_latex_mode = !in_latex_mode;
-
-            if (in_latex_mode) {
-                // Entering LaTeX mode, add opening LaTeX math delimiters
-                strcat(modified_latex, "\\(");
-            } else {
-                // Exiting LaTeX mode, add closing LaTeX math delimiters
-                strcat(modified_latex, "\\)");
-            }
-
-            ptr++;  // Move past the $
+            strcat(modified_latex, in_latex_mode ? "\\(" : "\\)");
+            ptr++;
         } else if (in_latex_mode && *(ptr + 1) == '/' && isalpha(*ptr) && isalpha(*(ptr + 2))) {
             // If pattern is like a/b inside LaTeX mode, convert it to \frac{a}{b}
             snprintf(temp, sizeof(temp), "\\frac{%c}{%c}", *ptr, *(ptr + 2));
             strcat(modified_latex, temp);
             ptr += 3; // Skip over a/b
+        } else if (in_latex_mode && strstr(ptr, "int") == ptr) {
+            // If "int" is found, insert \int for integration
+            strcat(modified_latex, "\\int");
+            ptr += 3; // Move pointer past "int"
+        } else if (in_latex_mode && strstr(ptr, "sum") == ptr) {
+            // If "sum" is found, insert \sum for summation
+            strcat(modified_latex, "\\sum");
+            ptr += 3; // Move pointer past "sum"
+        } else if (in_latex_mode && strstr(ptr, "prod") == ptr) {
+            // If "prod" is found, insert \prod for product
+            strcat(modified_latex, "\\prod");
+            ptr += 4; // Move pointer past "prod"
+        } else if (in_latex_mode && strstr(ptr, "matrix") == ptr) {
+            // If "matrix" is found, insert \begin{matrix} ... \end{matrix}
+            strcat(modified_latex, "\\begin{matrix} ... \\end{matrix}");
+            ptr += 6; // Move pointer past "matrix"
         } else {
             // Copy regular characters, including text outside LaTeX mode
             strncat(modified_latex, ptr, 1);
@@ -76,14 +96,11 @@ char* generate_html(const char *latex) {
         "<div id=\"math\">%s</div>"
         "</body>"
         "</html>", modified_latex);
-    
+
     return html_template;
 }
 
-
-
-
-// Callback function to handle "Open" action
+// Callback function for "Open" action
 void on_open_button_clicked(GtkWidget *widget, gpointer data) {
     GtkWidget *dialog;
     GtkWindow *parent_window = GTK_WINDOW(data);
@@ -96,7 +113,6 @@ void on_open_button_clicked(GtkWidget *widget, gpointer data) {
                                          "_Open", GTK_RESPONSE_ACCEPT,
                                          NULL);
 
-    // Show the dialog and wait for a response
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         char *filename;
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
@@ -119,11 +135,10 @@ void on_open_button_clicked(GtkWidget *widget, gpointer data) {
         g_free(filename);
     }
 
-    // Destroy the dialog
     gtk_widget_destroy(dialog);
 }
 
-// Callback function to handle "Save" action
+// Callback function for "Save" action
 void on_save_button_clicked(GtkWidget *widget, gpointer data) {
     GtkWidget *dialog;
     GtkWindow *parent_window = GTK_WINDOW(data);
@@ -136,7 +151,6 @@ void on_save_button_clicked(GtkWidget *widget, gpointer data) {
                                          "_Save", GTK_RESPONSE_ACCEPT,
                                          NULL);
 
-    // Show the dialog and wait for a response
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         char *filename;
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
@@ -160,7 +174,6 @@ void on_save_button_clicked(GtkWidget *widget, gpointer data) {
         g_free(filename);
     }
 
-    // Destroy the dialog
     gtk_widget_destroy(dialog);
 }
 
@@ -173,9 +186,15 @@ void on_text_changed(GtkTextBuffer *buffer, gpointer data) {
     gtk_text_buffer_get_bounds(buffer, &start, &end);
     char *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 
-    // Generate HTML and load it into the web view
-    char *html_content = generate_html(text);
-    webkit_web_view_load_html(web_view, html_content, NULL);
+    // Syntax checking
+    if (!check_latex_syntax(text)) {
+        // Handle the syntax error (can display an error message in a label or dialog)
+        printf("Syntax Error in LaTeX input\n");
+    } else {
+        // Generate HTML and load it into the web view
+        char *html_content = generate_html(text);
+        webkit_web_view_load_html(web_view, html_content, NULL);
+    }
 
     g_free(text);
 }
@@ -202,36 +221,36 @@ int main(int argc, char *argv[]) {
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD);
     gtk_box_pack_start(GTK_BOX(hbox), text_view, TRUE, TRUE, 0);
 
-    // Create a WebKit WebView for output
-    GtkWidget *web_view = webkit_web_view_new();
-    gtk_box_pack_start(GTK_BOX(hbox), web_view, TRUE, TRUE, 0);
+    // Create a WebKit WebView for LaTeX rendering
+    WebKitWebView *web_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+    gtk_box_pack_start(GTK_BOX(hbox), GTK_WIDGET(web_view), TRUE, TRUE, 0);
 
-    // Store the text view and web view in the window's user data
-    g_object_set_data(G_OBJECT(window), "text_view", text_view);
-    g_object_set_data(G_OBJECT(window), "web_view", web_view);
+    // Create a toolbar with Open and Save buttons
+    GtkWidget *toolbar = gtk_toolbar_new();
+    gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
-    // Connect the text buffer's "changed" signal to update the web view
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
-    g_signal_connect(buffer, "changed", G_CALLBACK(on_text_changed), web_view);
+    GtkToolItem *open_button = gtk_tool_button_new(NULL, "Open");
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), open_button, -1);
 
-    // Create a horizontal box for buttons
-    GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), button_box, FALSE, FALSE, 0);
+    GtkToolItem *save_button = gtk_tool_button_new(NULL, "Save");
+    gtk_toolbar_insert(GTK_TOOLBAR(toolbar), save_button, -1);
 
-    // Create "Open" button and connect it to the open callback
-    GtkWidget *open_button = gtk_button_new_with_label("Open");
+    // Connect signals for Open and Save buttons
     g_signal_connect(G_OBJECT(open_button), "clicked", G_CALLBACK(on_open_button_clicked), window);
-    gtk_box_pack_start(GTK_BOX(button_box), open_button, FALSE, FALSE, 0);
-
-    // Create "Save" button and connect it to the save callback
-    GtkWidget *save_button = gtk_button_new_with_label("Save");
     g_signal_connect(G_OBJECT(save_button), "clicked", G_CALLBACK(on_save_button_clicked), window);
-    gtk_box_pack_start(GTK_BOX(button_box), save_button, FALSE, FALSE, 0);
 
-    // Show all widgets
+    // Connect signal for text changes in the editor
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    g_signal_connect(G_OBJECT(buffer), "changed", G_CALLBACK(on_text_changed), web_view);
+
+    // Store text view in the window's user data for access in callbacks
+    g_object_set_data(G_OBJECT(window), "text_view", text_view);
+
+    // Connect the destroy signal for closing the window
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    // Show all widgets and start the GTK main loop
     gtk_widget_show_all(window);
-
-    // Enter the GTK main loop
     gtk_main();
 
     return 0;
