@@ -1,3 +1,6 @@
+//how to compile
+//make sure you have all required library installed 
+//gcc $(pkg-config --cflags gtk+-3.0 webkit2gtk-4.0) -o latex_editor latex_editor.c $(pkg-config --libs gtk+-3.0 webkit2gtk-4.0)
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
 #include <stdbool.h>
