@@ -1,0 +1,6 @@
+The tool should consist of:
+a. Editor section – where users can type the formulae or scientific notations using plain text
+and certain predefined tags or characters.
+Latex converted section where the final converted text is displayed
+Eg:$a/b$ to
+$\sqrt{\sqrt{\sqrt{x^3}}}$
