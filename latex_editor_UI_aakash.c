@@ -104,9 +104,47 @@ void parse_latex(const char *input, char *output, size_t max_output_size) {
                 strncat(output, "Fraction: ", max_output_size - strlen(output) - 1);
                 input += 4;
             } else if (strncmp(input, "sqrt", 4) == 0) {
-                strncat(output, "√", max_output_size - strlen(output) - 1);
-                input += 4;
-                while (*input == '{' || *input == '}') {
+                // Start processing the square root expression
+                strncat(output, "√(", max_output_size - strlen(output) - 1);
+                input += 4; // Move past 'sqrt'
+
+                // Skip the opening '{' if present
+                if (*input == '{') {
+                    input++;
+                }
+
+                // Recursively parse the content inside \sqrt
+                char inner_expr[256] = "";
+                const char *start = input;
+                int brace_count = 1; // Start with 1 for the current '{'
+
+                // Parse until the matching closing '}'
+                while (*input && brace_count > 0) {
+                    if (*input == '{') {
+                        brace_count++;
+                    } else if (*input == '}') {
+                        brace_count--;
+                    }
+
+                    if (brace_count > 0) {
+                        input++;
+                    }
+                }
+
+                // Copy the inner expression into a temporary buffer
+                strncpy(inner_expr, start, input - start);
+                inner_expr[input - start] = '\0';
+
+                // Recursively parse the inner expression
+                char parsed_inner_expr[256] = "";
+                parse_latex(inner_expr, parsed_inner_expr, sizeof(parsed_inner_expr));
+
+                // Append the parsed inner expression and close the root
+                strncat(output, parsed_inner_expr, max_output_size - strlen(output) - 1);
+                strncat(output, ")", max_output_size - strlen(output) - 1);
+
+                // Skip the closing '}'
+                if (*input == '}') {
                     input++;
                 }
             } else if (strncmp(input, "sum", 3) == 0) {
@@ -116,6 +154,7 @@ void parse_latex(const char *input, char *output, size_t max_output_size) {
                 strncat(output, "Unknown Command: ", max_output_size - strlen(output) - 1);
             }
         } else if (*input == '^') {
+            // Process exponents
             input++;
             if (isdigit(*input)) {
                 const char *sup = to_superscript(*input);
